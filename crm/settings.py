@@ -6,7 +6,8 @@ INSTALLED_APPS = [
 
 # Add CRONJOBS configuration
 CRONJOBS = [
-    ('*/5 * * * *', 'crm.cron.log_crm_heartbeat'),
+    ('*/5 * * * *', 'crm.cron.log_crm_heartbeat'),  # Your existing heartbeat job
+    ('0 */12 * * *', 'crm.cron.update_low_stock'),  # New low-stock update job
 ]
 
 # Optional: Specify where to store cron job logs
