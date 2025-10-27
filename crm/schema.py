@@ -1,6 +1,6 @@
 import graphene
 from graphene_django import DjangoObjectType
-from .models import Product  # Replace 'your_app' with your actual app name
+from crm.models import Product  # Replace 'your_app' with your actual app name
 
 class ProductType(DjangoObjectType):
     class Meta:

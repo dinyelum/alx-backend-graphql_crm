@@ -1,66 +1,62 @@
 from datetime import datetime
-import os
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
 
-def log_crm_heartbeat():
+def update_low_stock():
     """
-    CRM heartbeat cron job that logs every 5 minutes
-    Optionally verifies GraphQL endpoint is responsive
+    Cron job that runs every 12 hours to update low-stock products
     """
-    timestamp = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
-    log_message = f"{timestamp} CRM is alive"
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     try:
-        # Log the heartbeat message
-        with open('/tmp/crm_heartbeat_log.txt', 'a') as f:
-            f.write(log_message + '\n')
+        # Set up GraphQL client
+        transport = RequestsHTTPTransport(
+            url="http://localhost:8000/graphql",
+            use_json=True,
+        )
         
-        # Optional: Verify GraphQL endpoint is responsive
-        try:
-            # Set up GraphQL client
-            transport = RequestsHTTPTransport(
-                url="http://localhost:8000/graphql",
-                use_json=True,
-            )
-            
-            client = Client(
-                transport=transport,
-                fetch_schema_from_transport=True
-            )
-            
-            # Simple query to verify GraphQL endpoint
-            query = gql("""
-                query {
-                    hello
+        client = Client(
+            transport=transport,
+            fetch_schema_from_transport=True
+        )
+        
+        # GraphQL mutation to update low-stock products
+        mutation = gql("""
+            mutation UpdateLowStockProducts {
+                updateLowStockProducts {
+                    success
+                    message
+                    updatedProducts {
+                        id
+                        name
+                        stock
+                    }
                 }
-            """)
+            }
+        """)
+        
+        # Execute the mutation
+        result = client.execute(mutation)
+        
+        # Extract the mutation result
+        mutation_result = result.get('updateLowStockProducts', {})
+        
+        # Log the results
+        with open('/tmp/low_stock_updates_log.txt', 'a') as f:
+            f.write(f"[{timestamp}] {mutation_result.get('message', 'No message returned')}\n")
             
-            # Execute the query
-            result = client.execute(query)
-            
-            # Log successful GraphQL connection
-            with open('/tmp/crm_heartbeat_log.txt', 'a') as f:
-                f.write(f"{timestamp} GraphQL endpoint verified: {result}\n")
+            if mutation_result.get('success'):
+                updated_products = mutation_result.get('updatedProducts', [])
+                f.write(f"[{timestamp}] Updated {len(updated_products)} products:\n")
                 
-        except Exception as graphql_error:
-            # Log GraphQL connection error but don't fail the entire job
-            with open('/tmp/crm_heartbeat_log.txt', 'a') as f:
-                f.write(f"{timestamp} GraphQL check failed: {str(graphql_error)}\n")
+                for product in updated_products:
+                    product_name = product.get('name', 'Unknown')
+                    new_stock = product.get('stock', 0)
+                    f.write(f"[{timestamp}] - {product_name}: New stock level: {new_stock}\n")
+            else:
+                f.write(f"[{timestamp}] Mutation failed: {mutation_result.get('message', 'Unknown error')}\n")
     
     except Exception as e:
-        # Fallback log if file writing fails
-        print(f"Error in heartbeat cron job: {str(e)}")
-
-# Alternative simpler version without GraphQL check (if preferred):
-def log_crm_heartbeat_simple():
-    """
-    Simple CRM heartbeat without GraphQL verification
-    """
-    timestamp = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
-    
-    try:
-        with open('/tmp/crm_heartbeat_log.txt', 'a') as f:
-            f.write(f"{timestamp} CRM is alive\n")
-    except Exception as e:
-        print(f"Error writing heartbeat log: {str(e)}")
+        # Log any errors
+        with open('/tmp/low_stock_updates_log.txt', 'a') as f:
+            f.write(f"[{timestamp}] Error executing low-stock update: {str(e)}\n")
